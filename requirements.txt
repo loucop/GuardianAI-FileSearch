@@ -1,0 +1,11 @@
+tkinter
+sentence-transformers
+chromadb
+PyPDF2
+python-docx
+pdf2image
+pytesseract
+pandas
+tqdm
+pillow
+pptx
