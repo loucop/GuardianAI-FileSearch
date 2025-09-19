@@ -82,4 +82,35 @@ class FileSearchApp:
 
     def display_results(self, resultados):
         """
-        Exibe os resultados da pesq
+        Exibe os resultados da pesquisa no frame com scroll.
+        Cada resultado tem botões para abrir arquivo ou pasta.
+        """
+        if not resultados:
+            tk.Label(self.scroll_frame, text="Nenhum resultado encontrado.", bg="#f0f4f8").pack(pady=5)
+            return
+
+        for res in resultados:
+            frame = tk.Frame(self.scroll_frame, bg="#e2e8f0", padx=5, pady=5)
+            frame.pack(fill="x", pady=2, padx=5)
+
+            # Nome do arquivo/pasta
+            tk.Label(frame, text=res.get("nome", "Sem nome"), bg="#e2e8f0", font=("Arial", 10, "bold")).pack(side="left", padx=5)
+
+            # Botão para abrir arquivo
+            if res.get("tipo") == "arquivo":
+                tk.Button(frame, text="Abrir", command=lambda path=res["caminho"]: abrir_arquivo(path)).pack(side="right", padx=5)
+
+            # Botão para abrir pasta
+            tk.Button(frame, text="Pasta", command=lambda path=res["caminho"]: abrir_pasta(path)).pack(side="right", padx=5)
+
+    def show_about(self):
+        """
+        Exibe informações sobre o aplicativo.
+        """
+        messagebox.showinfo("Sobre", "Guardian AI FileSearch v1.0\nDesenvolvido por você com ❤️\n2025")
+
+# ---------------- RODAR A APP ----------------
+if __name__ == "__main__":
+    root = tk.Tk()
+    app = FileSearchApp(root)
+    root.mainloop()
