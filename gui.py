@@ -1,116 +1,122 @@
 import tkinter as tk
-from tkinter import ttk, messagebox
-from functools import partial
+from tkinter import ttk
 from ai_utils import pesquisar_chroma
 from file_utils import abrir_arquivo, abrir_pasta
 
-class FileSearchApp:
-    """
-    Classe principal da GUI do Guardian AI FileSearch.
-    Contém toda a interface Tkinter e lógica de exibição de resultados.
-    """
+class GuardianApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("Guardian AI FileSearch 1.0")
+        self.root.title("Guardian AI FileSearch")
         self.root.geometry("900x600")
-        self.root.iconbitmap("icone.ico")  # ícone da janela
-        self.root.configure(bg="#f0f4f8")
+        self.root.configure(bg="#f0f0f0")
 
-        # ---------------- FRAME SUPERIOR ----------------
-        top_frame = tk.Frame(root, bg="#f0f4f8", pady=5)
-        top_frame.pack(fill="x")
+        # ---------------- Entrada de pesquisa ----------------
+        tk.Label(root, text="Digite sua consulta:", font=("Arial", 12), bg="#f0f0f0").pack(anchor="w", padx=10, pady=(10,0))
+        self.entry = tk.Entry(root, font=("Arial", 12))
+        self.entry.pack(fill="x", padx=10, pady=5)
+        self.entry.bind("<Return>", lambda event: self.run_search())
 
-        # Campo de pesquisa
-        tk.Label(top_frame, text="Pesquisar:", bg="#f0f4f8").pack(side="left", padx=(10,5))
-        self.query_entry = tk.Entry(top_frame, width=40)
-        self.query_entry.pack(side="left", padx=(0,10))
+        # ---------------- Configurações da pesquisa ----------------
+        config_frame = tk.Frame(root, bg="#f0f0f0")
+        config_frame.pack(fill="x", padx=10, pady=5)
 
-        # Campo Top N
-        tk.Label(top_frame, text="Top N:", bg="#f0f4f8").pack(side="left")
-        self.top_var = tk.IntVar(value=3)
-        ttk.Combobox(top_frame, textvariable=self.top_var, values=[1,2,3,4,5], width=3).pack(side="left", padx=(0,10))
+        tk.Label(config_frame, text="Número de resultados:", bg="#f0f0f0").pack(side="left", padx=5)
+        self.top_k_var = tk.IntVar(value=5)
+        tk.Spinbox(config_frame, from_=1, to=50, textvariable=self.top_k_var, width=5).pack(side="left", padx=5)
 
-        # Campo Tipo (Arquivo / Pasta / Ambos)
-        tk.Label(top_frame, text="Tipo:", bg="#f0f4f8").pack(side="left")
-        self.type_var = tk.StringVar(value="Ambos")
-        ttk.Combobox(top_frame, textvariable=self.type_var, values=["Arquivo","Pasta","Ambos"], width=6).pack(side="left", padx=(0,10))
+        tk.Label(config_frame, text="Tipo de pesquisa:", bg="#f0f0f0").pack(side="left", padx=5)
+        self.tipo_var = tk.StringVar(value="both")
+        ttk.Combobox(config_frame, textvariable=self.tipo_var, values=["arquivo", "pasta", "both"], width=10).pack(side="left", padx=5)
 
-        # Botões de ação
-        tk.Button(top_frame, text="Pesquisar", command=self.run_search, bg="#3b82f6", fg="white").pack(side="left", padx=(0,10))
-        tk.Button(top_frame, text="Sobre", command=self.show_about).pack(side="right", padx=10)
+        self.btn_search = tk.Button(config_frame, text="Pesquisar", command=self.run_search)
+        self.btn_search.pack(side="left", padx=10)
 
-        # ---------------- FRAME COM SCROLL ----------------
-        container = tk.Frame(root)
-        container.pack(fill="both", expand=True)
-        canvas = tk.Canvas(container, bg="#f0f4f8")
-        scrollbar = ttk.Scrollbar(container, orient="vertical", command=canvas.yview)
-        self.scroll_frame = tk.Frame(canvas, bg="#f0f4f8")
+        # ---------------- Frame para resultados com scroll ----------------
+        self.frame_container = tk.Frame(root)
+        self.frame_container.pack(fill="both", expand=True, padx=10, pady=10)
 
-        # Atualiza área do canvas quando o frame muda de tamanho
-        self.scroll_frame.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
-        canvas.create_window((0,0), window=self.scroll_frame, anchor="nw")
-        canvas.configure(yscrollcommand=scrollbar.set)
+        self.canvas = tk.Canvas(self.frame_container, bg="#f0f0f0")
+        self.scrollbar = tk.Scrollbar(self.frame_container, orient="vertical", command=self.canvas.yview)
+        self.scrollable_frame = tk.Frame(self.canvas, bg="#f0f0f0")
 
-        canvas.pack(side="left", fill="both", expand=True)
-        scrollbar.pack(side="right", fill="y")
+        self.scrollable_frame.bind(
+            "<Configure>",
+            lambda e: self.canvas.configure(scrollregion=self.canvas.bbox("all"))
+        )
 
-    # ---------------- FUNÇÕES ----------------
+        self.canvas.create_window((0,0), window=self.scrollable_frame, anchor="nw")
+        self.canvas.configure(yscrollcommand=self.scrollbar.set)
+
+        self.canvas.pack(side="left", fill="both", expand=True)
+        self.scrollbar.pack(side="right", fill="y")
+
+    # ---------------- Executa pesquisa ----------------
     def run_search(self):
-        """
-        Executa a pesquisa usando o ChromaDB quando o usuário clica em 'Pesquisar'.
-        """
-        consulta = self.query_entry.get().strip()
-        top_n = self.top_var.get()
-        tipo = self.type_var.get().lower()
-        if tipo == "ambos":
-            tipo = "both"
-        elif tipo == "arquivo":
-            tipo = "arquivo"
-        elif tipo == "pasta":
-            tipo = "pasta"
+        consulta = self.entry.get()
+        if not consulta:
+            return
+        top_k = self.top_k_var.get()
+        tipo = self.tipo_var.get()
+        resultados = pesquisar_chroma(consulta, top_k=top_k, tipo=tipo)
+        self.display_results(resultados, consulta)
 
-        # Limpa resultados anteriores
-        for widget in self.scroll_frame.winfo_children():
+    # ---------------- Exibe resultados com highlight e botões ----------------
+    def display_results(self, resultados, consulta):
+        # Limpa resultados antigos
+        for widget in self.scrollable_frame.winfo_children():
             widget.destroy()
 
-        if not consulta:
-            messagebox.showwarning("Aviso","Digite algo para pesquisar!")
-            return
+        for tipo, lista in resultados.items():
+            tk.Label(self.scrollable_frame, text=tipo, font=("Arial", 12, "bold"), bg="#f0f0f0").pack(anchor="w", pady=5)
 
-        resultados = pesquisar_chroma(consulta, top_n, tipo)
-        self.display_results(resultados)
+            for res in lista:
+                path = res["path"] if isinstance(res, dict) else str(res)
+                snippet = res.get("snippet", "") if isinstance(res, dict) else ""
+                score = res.get("score", 0) if isinstance(res, dict) else 0
 
-    def display_results(self, resultados):
-        """
-        Exibe os resultados da pesquisa no frame com scroll.
-        Cada resultado tem botões para abrir arquivo ou pasta.
-        """
-        if not resultados:
-            tk.Label(self.scroll_frame, text="Nenhum resultado encontrado.", bg="#f0f4f8").pack(pady=5)
-            return
+                # Frame de cada resultado
+                frame = tk.Frame(self.scrollable_frame, bg="#e2e8f0", pady=5, padx=5)
+                frame.pack(fill="x", padx=5, pady=3)
 
-        for res in resultados:
-            frame = tk.Frame(self.scroll_frame, bg="#e2e8f0", padx=5, pady=5)
-            frame.pack(fill="x", pady=2, padx=5)
+                # Frame do texto + snippet
+                text_frame = tk.Frame(frame, bg="#e2e8f0")
+                text_frame.pack(side="left", fill="both", expand=True)
 
-            # Nome do arquivo/pasta
-            tk.Label(frame, text=res.get("nome", "Sem nome"), bg="#e2e8f0", font=("Arial", 10, "bold")).pack(side="left", padx=5)
+                # Path em negrito
+                tk.Label(text_frame, text=path, font=("Arial", 10, "bold"), bg="#e2e8f0").pack(anchor="w")
 
-            # Botão para abrir arquivo
-            if res.get("tipo") == "arquivo":
-                tk.Button(frame, text="Abrir", command=lambda path=res["caminho"]: abrir_arquivo(path)).pack(side="right", padx=5)
+                # Snippet com highlight
+                self.create_highlight(text_frame, snippet, consulta)
 
-            # Botão para abrir pasta
-            tk.Button(frame, text="Pasta", command=lambda path=res["caminho"]: abrir_pasta(path)).pack(side="right", padx=5)
+                # Frame dos botões
+                btn_frame = tk.Frame(frame, bg="#e2e8f0")
+                btn_frame.pack(side="right", padx=5)
 
-    def show_about(self):
-        """
-        Exibe informações sobre o aplicativo.
-        """
-        messagebox.showinfo("Sobre", "Guardian AI FileSearch v1.0\nDesenvolvido por você com ❤️\n2025")
+                tk.Button(btn_frame, text="Abrir Arquivo", command=lambda p=path: abrir_arquivo(p)).pack(pady=2, fill="x")
+                tk.Button(btn_frame, text="Abrir Pasta", command=lambda p=path: abrir_pasta(p)).pack(pady=2, fill="x")
 
-# ---------------- RODAR A APP ----------------
+                # Score
+                tk.Label(frame, text=f"{score:.2f}", bg="#e2e8f0", font=("Arial", 10)).pack(side="right", padx=5)
+
+    # ---------------- Função para highlight ----------------
+    def create_highlight(self, parent, texto, consulta):
+        parent_text = tk.Text(parent, height=1, bg="#e2e8f0", font=("Arial", 10), borderwidth=0)
+        parent_text.pack(fill="x", expand=True)
+        parent_text.tag_configure("highlight", foreground="red", font=("Arial", 10, "bold"))
+
+        lower_text = texto.lower()
+        lower_query = consulta.lower()
+        idx = lower_text.find(lower_query)
+        if idx == -1:
+            parent_text.insert("1.0", texto)
+        else:
+            parent_text.insert("1.0", texto[:idx])
+            parent_text.insert("end", texto[idx:idx+len(consulta)], "highlight")
+            parent_text.insert("end", texto[idx+len(consulta):])
+        parent_text.configure(state="disabled")
+
+# ---------------- Execução principal ----------------
 if __name__ == "__main__":
     root = tk.Tk()
-    app = FileSearchApp(root)
+    app = GuardianApp(root)
     root.mainloop()

@@ -1,7 +1,8 @@
 import tkinter as tk
-from gui import FileSearchApp
+from gui import GuardianApp
 
 if __name__ == "__main__":
     root = tk.Tk()
-    app = FileSearchApp(root)
+    app = GuardianApp(root)
     root.mainloop()
+
